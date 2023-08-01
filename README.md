@@ -1,39 +1,83 @@
-# ParserUtil
+#  SQL Parser & Rewriter
+## An Dependecies Decoupled Library for Trino
+In offical trino, query optimization and plan rewriting are tight coupled with many unnessary classes for query execution, such as web server, QueryManager, SqlTaskManager, Resource Manager etc. It is not practical for some users who just simply want to parse or rewrite a query while pertaining the original grammar supports and features from Trino.
 
-#### 介绍
-{**以下是 Gitee 平台说明，您可以替换此简介**
-Gitee 是 OSCHINA 推出的基于 Git 的代码托管平台（同时支持 SVN）。专为开发者提供稳定、高效、安全的云端软件开发协作平台
-无论是个人、团队、或是企业，都能够用 Gitee 实现代码托管、项目管理、协作开发。企业项目请看 [https://gitee.com/enterprises](https://gitee.com/enterprises)}
+This is a demo libray that remove unecssary dependencies from Trino, while retains basic functionalities like SQL parsing, query optimization, optimization rules and SQL validation against databases. On the other hand, there are some new features that may help usera to further their developments.
 
-#### 软件架构
-软件架构说明
+## Support for Original Trino Features
+- Parsing SQL into AST (Done)
+- Rewrite SQL base on AST (Done)
+- User access control on SQL (In progress)
+- Query rewrite & optimization (Done)
+- Dependencies injection using airlift (Done)
 
+## Features
+- User access control configuration in runtime (Not started)
+- Convert logical plan back to SQL (Not started)
 
-#### 安装教程
+## Tested on
+- Apache Hive (Done)
+- Posgresql (Not started)
+- Mysql (Not started)
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+## Installation
+### Requirement
+| Dependencies          | Version | Comment                                                    |
+|-----------------------|---------|------------------------------------------------------------|
+| Openjdk               | 17      | JDK version is aligned with offical trino jdk requirement. |
+| trino-main            | 421     | This is required.                                          |
+| trino-hive-hadoop2    | 421     | Optional, it is required while connectiong Apache Hive.    |
+| bootstrap(io.airlift) | 234     | This is required because it is used by official trino.     |
 
-#### 使用说明
+Build the project by running:
+```
+mvn clean install
+```
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+## How to use
+### SQL example
+```
+SELECT
+    GROUP_KEY AS GROUP_KEY,
+    COUNT(MESSAGE_A) AS CNT1,
+    COUNT(MESSAGE_B) AS CNT2,
+    ROW_NUMBER() OVER(PARTITION BY GROUP_KEY ORDER BY COUNT(MESSAGE_A)) AS RN
+FROM (
+    SELECT CAST('KEY' AS VARCHAR) AS GROUP_KEY, A.MESSAGE AS MESSAGE_A, B.MESSAGE AS MESSAGE_B
+    FROM HDFS.TEST.EXAMPLE A
+    LEFT JOIN (
+        SELECT *
+        FROM HDFS.TEST.EXAMPLE
+    ) B ON A.MESSAGE = B.MESSAGE
+) T
+WHERE MESSAGE_A != 'HAHAHAHA' AND MESSAGE_B != 'TEST'
+GROUP BY GROUP_KEY
+```
+### Parsing SQL
+```
+Statement queryStatement = QueryUtil.parseSQL(sql);
+// or
+Statement queryStatement = QueryUtil.getQueryParser().parse(sql, new ParserOption());
+```
+### Using Optimizers from Trino for query optimization and plan rewrite
+Create QueryRewriter object for query plan rewrite
+```
+QueryRewriter queryRewriter = QueryUtil.getOrCreateQueryRewriter();
+```
 
-#### 参与贡献
-
-1.  Fork 本仓库
-2.  新建 Feat_xxx 分支
-3.  提交代码
-4.  新建 Pull Request
-
-
-#### 特技
-
-1.  使用 Readme\_XXX.md 来支持不同的语言，例如 Readme\_en.md, Readme\_zh.md
-2.  Gitee 官方博客 [blog.gitee.com](https://blog.gitee.com)
-3.  你可以 [https://gitee.com/explore](https://gitee.com/explore) 这个地址来了解 Gitee 上的优秀开源项目
-4.  [GVP](https://gitee.com/gvp) 全称是 Gitee 最有价值开源项目，是综合评定出的优秀开源项目
-5.  Gitee 官方提供的使用手册 [https://gitee.com/help](https://gitee.com/help)
-6.  Gitee 封面人物是一档用来展示 Gitee 会员风采的栏目 [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+(must do)Add hive metastore connection:
+```
+queryRewriter.addHiveCatalog(catalogName, uri, hdfsconfigPath);
+```
+Analyze query, including type validation
+```
+AnalyzedQuery analyze = queryRewriter.analyze(sql);
+```
+Perform query optimization, which includes query plan rewrite.
+```
+QueryPlan optimizedQueryPlan = queryRewriter.createOptimizedQueryPlan(analyze);
+```
+Print query plan rewrite result
+```
+optimizedQueryPlan.printPlan();
+```
